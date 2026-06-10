@@ -1,0 +1,37 @@
+{
+  "BAIDUWP": [
+    {
+      "cookie": "BDUSS=xxxxxx; STOKEN=xxxxxx; ...",
+      "app": {
+        "enabled": false,
+        "z": "从 Reqable HAR 中 /api/loginstatus 或 /coins/taskcenter/signinlist 的 z 参数复制",
+        "cuid": "从 Reqable HAR 中复制",
+        "devuid": "从 Reqable HAR 中复制",
+        "channel": "android_15_xxx_bd-netdisk_xxx",
+        "version": "13.20.7",
+        "versioncode": "4062",
+        "coin_sign_task_id": "3434916321758720",
+        "coin_sign_task_from": "task_sys_daily",
+        "is_growth": 1,
+        "question_task_id": "3434468751761026",
+        "question_task_from": "task_sys_task_growth",
+        "uk": "从 /api/taskscore/tasksave 的 uk 参数复制",
+        "token": "从 /api/taskscore/tasksave 的 token 参数复制"
+      }
+    }
+  ],
+  "EMAIL": {
+    "enabled": false,
+    "smtp_host": "smtp.qq.com",
+    "smtp_port": 465,
+    "smtp_user": "your-email@qq.com",
+    "smtp_password": "your-smtp-authorization-code",
+    "from_addr": "your-email@qq.com",
+    "to_addrs": [
+      "receiver@example.com"
+    ],
+    "use_ssl": true,
+    "use_tls": false,
+    "subject": "百度网盘签到通知"
+  }
+}

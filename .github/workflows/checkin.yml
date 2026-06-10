@@ -1,0 +1,75 @@
+name: BaiduWP Checkin
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run web or app entrypoint"
+        required: true
+        default: web
+        type: choice
+        options:
+          - web
+          - app
+  schedule:
+    # 07:20 Asia/Shanghai. GitHub Actions cron uses UTC.
+    - cron: "20 23 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baiduwp-checkin
+  cancel-in-progress: false
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Shanghai
+      BAIDUWP_CONFIG: ${{ secrets.BAIDUWP_CONFIG }}
+      BAIDUWP: ${{ secrets.BAIDUWP }}
+      CHECKIN_MODE: ${{ vars.CHECKIN_MODE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate secret configuration
+        run: |
+          if [ -z "$BAIDUWP_CONFIG" ] && [ -z "$BAIDUWP" ]; then
+            echo "Missing secret: set BAIDUWP_CONFIG for full JSON config, or BAIDUWP for cookie/account JSON."
+            exit 1
+          fi
+
+      - name: Run checkin
+        run: |
+          mode="${{ github.event.inputs.mode }}"
+          if [ -z "$mode" ]; then
+            mode="${CHECKIN_MODE:-web}"
+          fi
+
+          case "$mode" in
+            web)
+              python -m baiduwp_checkin --no-random-delay
+              ;;
+            app)
+              python baiduwp_checkin/app.py
+              ;;
+            *)
+              echo "Unsupported CHECKIN_MODE: $mode"
+              exit 1
+              ;;
+          esac
