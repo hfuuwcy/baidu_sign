@@ -6,7 +6,6 @@ from typing import Any
 
 import requests
 
-from .app import BaiduWPApp
 from .common import (
     load_accounts,
     normalize_email_config,
@@ -22,12 +21,11 @@ LOGGER = logging.getLogger("baiduwp_checkin")
 class BaiduWP:
     name = "百度网盘"
 
-    def __init__(self, cookie: str, timeout: int = 30, app_config: dict[str, Any] | None = None):
+    def __init__(self, cookie: str, timeout: int = 30):
         if not cookie:
             raise ValueError("必须提供百度网盘 Cookie")
         self.cookie = cookie
         self.timeout = timeout
-        self.app_config = app_config or {}
         self.session = requests.Session()
         self.headers = {
             "User-Agent": (
@@ -143,24 +141,6 @@ class BaiduWP:
             return ""
         return f"（本次变化{after_int - before_int:+d}）"
 
-    def maybe_save_question_task(self) -> str:
-        if not isinstance(self.app_config, dict) or not self.app_config.get("enabled", False):
-            return "，未配置App任务上报"
-        try:
-            result = BaiduWPApp(cookie=self.cookie, app_config=self.app_config, timeout=self.timeout).taskscore_save()
-        except Exception as exc:
-            LOGGER.warning("App任务上报失败: %s", exc)
-            return f"，App任务上报失败: {exc}"
-
-        errno = result.get("errno")
-        error_code = result.get("error_code")
-        message = result.get("errmsg") or result.get("error_msg") or result.get("show_msg") or result.get("msg") or ""
-        if errno == 0 or error_code == 0:
-            return f"，App任务上报成功{message}"
-        if message:
-            return f"，App任务上报返回: {message}"
-        return "，App任务上报已请求"
-
     def answer_daily_question(self, before_value: Any) -> tuple[str, Any]:
         question_info = self.get_question()
         ask_id = question_info.get("ask_id")
@@ -175,24 +155,12 @@ class BaiduWP:
         if answer_status == 1:
             _, current_value = self.get_userinfo()
             delta = self.format_delta(before_value, current_value)
-            if self._to_int(current_value) == self._to_int(before_value):
-                task_msg = self.maybe_save_question_task()
-                time.sleep(1)
-                _, current_value = self.get_userinfo()
-                delta = self.format_delta(before_value, current_value)
-                return f"答题已完成，得分{existing_score or ''}{task_msg}{delta}", current_value
             return f"答题已完成，得分{existing_score or ''}{delta}", current_value
 
         answer_result = self.answer_question(ask_id, answer)
         time.sleep(1)
         _, current_value = self.get_userinfo()
         delta = self.format_delta(before_value, current_value)
-        if self._to_int(current_value) == self._to_int(before_value):
-            task_msg = self.maybe_save_question_task()
-            time.sleep(1)
-            _, current_value = self.get_userinfo()
-            delta = self.format_delta(before_value, current_value)
-            return f"答题获得{answer_result.get('score') or ''}{answer_result.get('message') or ''}{task_msg}{delta}", current_value
         return f"答题获得{answer_result.get('score') or ''}{answer_result.get('message') or ''}{delta}", current_value
 
     def run(self) -> str:
@@ -288,11 +256,7 @@ def main() -> None:
     for index, account in enumerate(accounts, start=1):
         LOGGER.info("开始执行百度网盘账号 %s", index)
         try:
-            result = BaiduWP(
-                cookie=account["cookie"],
-                timeout=args.timeout,
-                app_config=account.get("app") if isinstance(account.get("app"), dict) else None,
-            ).run()
+            result = BaiduWP(cookie=account["cookie"], timeout=args.timeout).run()
             content_list.append(f"百度网盘账号 {index}\n{result}")
             LOGGER.info("百度网盘账号 %s 执行完成\n%s", index, result)
         except Exception as exc:

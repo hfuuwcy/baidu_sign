@@ -242,7 +242,7 @@ GET https://pan.baidu.com/act/v2/membergrowv2/answerquestion
 }
 ```
 
-网页端每日答题提交后，如果成长值没有变化，脚本会在配置了 App 参数时尝试调用 `/api/taskscore/tasksave` 上报/完成每日一题成长值任务。
+`/api/taskscore/tasksave` 当前没有在网页端入口中自动调用；此前测试返回“参数错误”，先保留配置字段用于后续抓包调试。
 
 App 端代码在 `baiduwp_checkin/app.py`，和网页端入口分离。两个入口读取同一个 `config.json`，但 Web 入口只执行 Web 签到/答题，App 入口只执行 App 签到/答题。
 
