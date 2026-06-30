@@ -1,7 +1,7 @@
 [project]
 name = "baiduwp-checkin"
 version = "0.1.0"
-description = "Baidu Netdisk membership daily check-in"
+description = "Baidu Netdisk web membership daily check-in"
 requires-python = ">=3.9"
 dependencies = [
     "requests~=2.25.1",

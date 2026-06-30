@@ -8,6 +8,7 @@ import requests
 
 from .common import (
     load_accounts,
+    load_email_config,
     normalize_email_config,
     send_email,
     setup_logging,
@@ -184,6 +185,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cookie", help="直接传入百度网盘 Cookie")
     parser.add_argument("--timeout", type=int, default=30, help="请求超时时间，默认 30 秒")
     parser.add_argument("--log-file", default="logs/baiduwp_checkin.log", help="日志文件路径")
+    parser.add_argument("--email-config", help="邮箱配置文件路径，默认自动查找 email.json")
     parser.add_argument("--no-email", action="store_true", help="禁用邮箱通知")
     parser.add_argument("--test-email", action="store_true", help="只测试邮箱通知，不执行签到")
     parser.add_argument("--test-userinfo", action="store_true", help="只测试会员信息查询，不执行签到和答题")
@@ -199,15 +201,23 @@ def main() -> None:
     accounts, config_data, loaded_config_path = load_accounts(args.config, args.cookie)
     if loaded_config_path:
         LOGGER.info("使用配置文件: %s", loaded_config_path)
+    email_data, loaded_email_config_path = load_email_config(args.email_config)
+    if loaded_email_config_path:
+        LOGGER.info("使用邮箱配置文件: %s", loaded_email_config_path)
 
     if args.test_email:
-        email_config = normalize_email_config(config_data)
+        email_config = normalize_email_config(email_data)
         if not email_config:
-            raise SystemExit("邮箱通知未启用或未配置，请在 config.json 中配置 EMAIL.enabled=true")
+            raise SystemExit("邮箱通知未启用或未配置，请在 email.json 中配置 enabled=true")
         send_email(
             email_config,
             "百度网盘签到邮箱测试",
-            f"这是一封测试邮件。\n\n配置文件: {loaded_config_path}\n日志文件: {log_path}",
+            (
+                "这是一封测试邮件。\n\n"
+                f"配置文件: {loaded_config_path}\n"
+                f"邮箱配置文件: {loaded_email_config_path}\n"
+                f"日志文件: {log_path}"
+            ),
         )
         LOGGER.info("邮箱测试完成")
         return
@@ -236,7 +246,7 @@ def main() -> None:
                 LOGGER.exception("百度网盘账号 %s 会员信息查询异常", index)
                 print(f"百度网盘账号 {index}: 会员信息查询异常: {exc}")
 
-        email_config = normalize_email_config(config_data)
+        email_config = normalize_email_config(email_data)
         if email_config and not args.no_email:
             try:
                 send_email(email_config, "百度网盘会员信息测试", "\n".join(content_list))
@@ -267,7 +277,7 @@ def main() -> None:
     content_list.append(f"任务用时: {elapsed} 秒\n日志文件: {log_path}")
     content = "\n\n".join(content_list)
 
-    email_config = normalize_email_config(config_data)
+    email_config = normalize_email_config(email_data)
     if email_config and not args.no_email:
         try:
             send_email(email_config, "百度网盘签到通知", content)

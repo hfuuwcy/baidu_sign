@@ -4,7 +4,10 @@ __pycache__/
 venv/
 
 config.json
+email.json
 config/
 logs/
+.idea/
+baiduwp_app_checkin/
 
 [{]clienttype0,parasitiferwap,serverI.txt
