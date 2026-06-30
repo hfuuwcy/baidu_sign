@@ -15,6 +15,17 @@
         "is_growth": 1,
         "question_task_id": "3434468751761026",
         "question_task_from": "task_sys_task_growth",
+        "taskscore_tasks": [
+          {
+            "enabled": false,
+            "name": "App广告观看任务",
+            "task_id": "3434632741761030",
+            "task_from": [
+              "task_sys_task_growth"
+            ],
+            "delay_seconds": 0
+          }
+        ],
         "uk": "从 /api/taskscore/tasksave 的 uk 参数复制",
         "token": "从 /api/taskscore/tasksave 的 token 参数复制"
       }

@@ -35,6 +35,129 @@ def load_json_file(path: str | Path) -> Any:
         return json.load(file)
 
 
+def env_value(name: str) -> str:
+    return os.getenv(name, "").strip()
+
+
+def parse_env_bool(value: str, default: bool = False) -> bool:
+    if not value:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
+def parse_env_int(value: str) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def parse_env_jsonish(value: str) -> Any:
+    if not value:
+        return None
+    if value[0] in "[{":
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def add_env_value(config: dict[str, Any], env_name: str, key: str, value_type: str = "str") -> None:
+    value = env_value(env_name)
+    if not value:
+        return
+
+    if value_type == "int":
+        int_value = parse_env_int(value)
+        if int_value is not None:
+            config[key] = int_value
+        return
+    if value_type == "bool":
+        config[key] = parse_env_bool(value)
+        return
+    if value_type == "jsonish":
+        config[key] = parse_env_jsonish(value)
+        return
+    config[key] = value
+
+
+def build_split_env_config() -> tuple[Any, str | None]:
+    cookie = env_value("BAIDUWP_COOKIE")
+    if not cookie:
+        return None, None
+
+    app: dict[str, Any] = {}
+    app_fields = {
+        "BAIDUWP_APP_Z": ("z", "str"),
+        "BAIDUWP_APP_CUID": ("cuid", "str"),
+        "BAIDUWP_APP_DEVUID": ("devuid", "str"),
+        "BAIDUWP_APP_CHANNEL": ("channel", "jsonish"),
+        "BAIDUWP_APP_VERSION": ("version", "str"),
+        "BAIDUWP_APP_VERSIONCODE": ("versioncode", "str"),
+        "BAIDUWP_APP_CLIENTTYPE": ("clienttype", "str"),
+        "BAIDUWP_APP_THEMEINFO": ("themeinfo", "str"),
+        "BAIDUWP_APP_RCHANNEL": ("rchannel", "str"),
+        "BAIDUWP_APP_APP": ("app", "str"),
+        "BAIDUWP_APP_USER_AGENT": ("user_agent", "str"),
+        "BAIDUWP_APP_OFFLINEPACKAGE": ("offlinepackage", "jsonish"),
+        "BAIDUWP_APP_TASKS": ("taskscore_tasks", "jsonish"),
+        "BAIDUWP_APP_TASKSCORE_TASKS": ("taskscore_tasks", "jsonish"),
+        "BAIDUWP_APP_COIN_SIGN_TASK_ID": ("coin_sign_task_id", "str"),
+        "BAIDUWP_APP_COIN_SIGN_TASK_FROM": ("coin_sign_task_from", "jsonish"),
+        "BAIDUWP_APP_IS_GROWTH": ("is_growth", "int"),
+        "BAIDUWP_APP_QUESTION_TASK_ID": ("question_task_id", "str"),
+        "BAIDUWP_APP_QUESTION_TASK_FROM": ("question_task_from", "jsonish"),
+        "BAIDUWP_APP_UK": ("uk", "str"),
+        "BAIDUWP_APP_TOKEN": ("token", "str"),
+    }
+    for env_name, (key, value_type) in app_fields.items():
+        add_env_value(app, env_name, key, value_type)
+
+    ad_watch: dict[str, Any] = {}
+    add_env_value(ad_watch, "BAIDUWP_APP_AD_WATCH_ENABLED", "enabled", "bool")
+    add_env_value(ad_watch, "BAIDUWP_APP_AD_WATCH_TASK_ID", "task_id")
+    add_env_value(ad_watch, "BAIDUWP_APP_AD_WATCH_TASK_FROM", "task_from", "jsonish")
+    add_env_value(ad_watch, "BAIDUWP_APP_AD_WATCH_DELAY_SECONDS", "delay_seconds", "int")
+    if ad_watch:
+        app["ad_watch"] = ad_watch
+
+    explicit_app_enabled = env_value("BAIDUWP_APP_ENABLED")
+    if app or explicit_app_enabled:
+        app["enabled"] = parse_env_bool(explicit_app_enabled, default=True)
+
+    account: dict[str, Any] = {"cookie": cookie}
+    if app:
+        account["app"] = app
+
+    config: dict[str, Any] = {"BAIDUWP": [account]}
+
+    email: dict[str, Any] = {}
+    email_fields = {
+        "BAIDUWP_EMAIL_SMTP_HOST": ("smtp_host", "str"),
+        "BAIDUWP_EMAIL_SMTP_PORT": ("smtp_port", "int"),
+        "BAIDUWP_EMAIL_SMTP_USER": ("smtp_user", "str"),
+        "BAIDUWP_EMAIL_SMTP_PASSWORD": ("smtp_password", "str"),
+        "BAIDUWP_EMAIL_SMTP_PASSWORD_ENV": ("smtp_password_env", "str"),
+        "BAIDUWP_EMAIL_FROM_ADDR": ("from_addr", "str"),
+        "BAIDUWP_EMAIL_TO_ADDRS": ("to_addrs", "jsonish"),
+        "BAIDUWP_EMAIL_USE_SSL": ("use_ssl", "bool"),
+        "BAIDUWP_EMAIL_USE_TLS": ("use_tls", "bool"),
+        "BAIDUWP_EMAIL_SUBJECT": ("subject", "str"),
+    }
+    for env_name, (key, value_type) in email_fields.items():
+        add_env_value(email, env_name, key, value_type)
+
+    explicit_email_enabled = env_value("BAIDUWP_EMAIL_ENABLED")
+    if email or explicit_email_enabled:
+        email["enabled"] = parse_env_bool(explicit_email_enabled, default=True)
+        config["EMAIL"] = email
+
+    return config, "split environment variables"
+
+
 def normalize_accounts(data: Any) -> list[dict[str, Any]]:
     if isinstance(data, dict) and isinstance(data.get("BAIDUWP"), list):
         accounts = data["BAIDUWP"]
@@ -83,6 +206,9 @@ def load_env_config() -> tuple[Any, str | None]:
         env_value = os.getenv(env_name, "").strip()
         if env_value:
             return json.loads(env_value), env_name
+    split_config, split_source = build_split_env_config()
+    if split_config is not None:
+        return split_config, split_source
     return None, None
 
 

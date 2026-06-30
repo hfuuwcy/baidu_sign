@@ -46,11 +46,23 @@ class BaiduWPApp:
             "Cookie": self.cookie,
         }
 
+    @staticmethod
+    def _param_value(value: Any) -> str:
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    @classmethod
+    def _normalize_params(cls, params: dict[str, Any]) -> dict[str, str]:
+        return {key: cls._param_value(value) for key, value in params.items() if value is not None}
+
     def _get(self, path: str, params: dict[str, Any]) -> tuple[int, Any, str]:
         response = self.session.get(
             f"https://pan.baidu.com{path}",
             headers=self.headers,
-            params=params,
+            params=self._normalize_params(params),
             timeout=self.timeout,
         )
         text = response.text
@@ -83,11 +95,7 @@ class BaiduWPApp:
             "app": self.app_config.get("app", "android"),
         }
         if offlinepackage:
-            params["offlinepackage"] = (
-                json.dumps(offlinepackage, ensure_ascii=False, separators=(",", ":"))
-                if isinstance(offlinepackage, (dict, list))
-                else str(offlinepackage)
-            )
+            params["offlinepackage"] = offlinepackage
         return params
 
     def loginstatus(self) -> dict[str, Any]:
@@ -135,10 +143,19 @@ class BaiduWPApp:
             raise ValueError(f"App 积分中心查询失败: {status_code}")
         return data
 
-    def taskscore_save(self, task_id: Any | None = None, task_from: Any | None = None) -> dict[str, Any]:
+    def taskscore_save(
+        self,
+        task_id: Any | None = None,
+        task_from: Any | None = None,
+        label: str = "App任务上报",
+    ) -> dict[str, Any]:
         params = self._common_params()
-        task_id = task_id or self.app_config.get("question_task_id") or "3434468751761026"
-        task_from = task_from or self.app_config.get("question_task_from") or "task_sys_task_growth"
+        task_id = task_id if task_id is not None else self.app_config.get("question_task_id") or "3434468751761026"
+        task_from = (
+            task_from
+            if task_from is not None
+            else self.app_config.get("question_task_from") or "task_sys_task_growth"
+        )
         uk = self.app_config.get("uk")
         token = self.app_config.get("token")
         missing = [key for key, value in {"uk": uk, "token": token}.items() if not value]
@@ -146,16 +163,111 @@ class BaiduWPApp:
             raise ValueError(f"App 任务上报缺少配置: {', '.join(missing)}")
         params.update(
             {
-                "task_id": str(task_id),
-                "task_from": str(task_from),
-                "uk": str(uk),
-                "token": str(token),
+                "task_id": task_id,
+                "task_from": task_from,
+                "uk": uk,
+                "token": token,
             }
         )
-        status_code, data, _ = self._get("/api/taskscore/tasksave", params)
+        status_code, data, text = self._get("/api/taskscore/tasksave", params)
         if status_code != 200 or not isinstance(data, dict):
-            raise ValueError(f"App 任务上报失败: {status_code}")
+            detail = data if data is not None else text[:200]
+            raise ValueError(f"{label}失败: {status_code} {detail}")
         return data
+
+    @staticmethod
+    def taskscore_status(label: str, result: dict[str, Any]) -> str:
+        errno = result.get("errno")
+        error_code = result.get("error_code")
+        message = result.get("errmsg") or result.get("error_msg") or result.get("show_msg")
+        result_data = result.get("data")
+        score = result.get("score")
+        if score in (None, ""):
+            score = result.get("points")
+        if isinstance(result_data, dict):
+            message = message or result_data.get("errmsg") or result_data.get("error_msg") or result_data.get("show_msg")
+            if score in (None, ""):
+                score = result_data.get("score")
+            if score in (None, ""):
+                score = result_data.get("points")
+
+        details = []
+        if score not in (None, ""):
+            details.append(f"得分{score}")
+        if message:
+            details.append(str(message))
+        suffix = f"（{'，'.join(details)}）" if details else ""
+
+        if errno == 0 or error_code == 0 or errno == "0" or error_code == "0":
+            return f"{label}: 成功{suffix}"
+        if details:
+            return f"{label}: 返回提示{suffix}"
+        code = errno if errno is not None else error_code
+        return f"{label}: 已请求，响应码{code if code is not None else '未知'}"
+
+    def legacy_ad_watch_task(self) -> dict[str, Any] | None:
+        ad_config = self.app_config.get("ad_watch")
+        if isinstance(ad_config, dict):
+            if not ad_config.get("enabled", False):
+                return None
+        elif self.app_config.get("ad_watch_enabled", False):
+            ad_config = {}
+        else:
+            return None
+
+        return {
+            "enabled": True,
+            "name": ad_config.get("name") or "App广告观看任务",
+            "task_id": ad_config.get("task_id") or self.app_config.get("ad_watch_task_id") or "3434632741761030",
+            "task_from": (
+                ad_config.get("task_from")
+                or self.app_config.get("ad_watch_task_from")
+                or ["task_sys_task_growth"]
+            ),
+            "delay_seconds": ad_config.get("delay_seconds") or self.app_config.get("ad_watch_delay_seconds") or 0,
+        }
+
+    def taskscore_task_configs(self) -> list[dict[str, Any]]:
+        raw_tasks = self.app_config.get("taskscore_tasks") or self.app_config.get("tasksave_tasks")
+        tasks: list[dict[str, Any]] = []
+        if isinstance(raw_tasks, list):
+            for index, item in enumerate(raw_tasks, start=1):
+                if not isinstance(item, dict):
+                    continue
+                if item.get("enabled", True) is False:
+                    continue
+                task = dict(item)
+                task.setdefault("name", f"App任务上报{index}")
+                tasks.append(task)
+            return tasks
+
+        legacy_task = self.legacy_ad_watch_task()
+        return [legacy_task] if legacy_task else []
+
+    def run_taskscore_task(self, task_config: dict[str, Any]) -> str:
+        label = str(task_config.get("name") or "App任务上报")
+        task_id = task_config.get("task_id")
+        task_from = task_config.get("task_from") or ["task_sys_task_growth"]
+        if not task_id:
+            return f"{label}: 已跳过，缺少 task_id"
+
+        delay_seconds = int(task_config.get("delay_seconds") or 0)
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+
+        result = self.taskscore_save(task_id=task_id, task_from=task_from, label=label)
+        return self.taskscore_status(label, result)
+
+    def run_taskscore_tasks(self) -> list[str]:
+        results = []
+        for task_config in self.taskscore_task_configs():
+            label = str(task_config.get("name") or "App任务上报")
+            try:
+                results.append(self.run_taskscore_task(task_config))
+            except Exception as exc:
+                results.append(f"{label}: 执行失败: {exc}")
+                LOGGER.exception("%s执行失败", label)
+        return results
 
     def membership_user(self) -> dict[str, Any]:
         params = self._common_params()
@@ -230,6 +342,7 @@ class BaiduWPApp:
         signin_result = self.coin_signin(is_growth=is_growth)
         signin_list_data = self.coin_signin_list(is_growth=is_growth)
         question_result = self.daily_question()
+        taskscore_results = self.run_taskscore_tasks()
         after_level_info = self.membership_user()
 
         signin_result_info = signin_result.get("data") if isinstance(signin_result, dict) else {}
@@ -249,14 +362,20 @@ class BaiduWPApp:
             delta = current_value - before_value
             growth_delta = f"（本次变化{delta:+d}）"
         username = login_info.get("username") or ""
-        return (
-            f"App账号{username}\n"
-            f"App连续签到: {signin_status}\n"
-            f"App签到天数: {signin_days or ''}\n"
-            f"{question_result}\n"
-            f"当前会员等级: {current_level if current_level is not None else ''}\n"
-            f"当前成长值: {current_value if current_value is not None else ''}{growth_delta}"
+        lines = [
+            f"App账号{username}",
+            f"App连续签到: {signin_status}",
+            f"App签到天数: {signin_days or ''}",
+            question_result,
+        ]
+        lines.extend(taskscore_results)
+        lines.extend(
+            [
+                f"当前会员等级: {current_level if current_level is not None else ''}",
+                f"当前成长值: {current_value if current_value is not None else ''}{growth_delta}",
+            ]
         )
+        return "\n".join(lines)
 
 
 def _direct_main() -> None:
