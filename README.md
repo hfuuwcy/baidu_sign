@@ -8,8 +8,6 @@
 - 支持多账号
 - 支持独立邮箱通知配置
 
-App 端任务已经拆分为独立项目，不再和网页端共用代码、配置或 GitHub Actions。
-
 ## 安装
 
 ```bash
@@ -173,13 +171,6 @@ python -m baiduwp_checkin --no-random-delay
 2. 访问 `https://pan.baidu.com/wap/svip/growth/task`。
 3. 从浏览器开发者工具复制完整 Cookie，填入 `config.json` 或 GitHub Secret。
 
-如果是从 Apifox 参数表复制 Cookie，不要把 `true,name,value,type...` 这种整行格式放进配置。`cookie` 字段只需要标准 Cookie 字符串：
-
-```text
-BDUSS=xxxxxx; STOKEN=xxxxxx; BAIDUID=xxxxxx; csrfToken=xxxxxx; PANWEB=1
-```
-
-同名 Cookie 如果抓包里出现多次，通常保留一个有效值即可；`BDUSS`、`STOKEN`、`BDUSS_BFESS` 等登录凭证不要提交到仓库。
 
 ## 配置读取顺序
 
