@@ -1,16 +1,16 @@
-name: BaiduWP Web Checkin
+name: BaiduWP App Checkin
 
 on:
   workflow_dispatch:
   schedule:
-    # 10:20 Asia/Shanghai. GitHub Actions cron uses UTC.
-    - cron: "20 2 * * *"
+    # 10:40 Asia/Shanghai. GitHub Actions cron uses UTC.
+    - cron: "40 2 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: baiduwp-web-checkin
+  group: baiduwp-app-checkin
   cancel-in-progress: false
 
 jobs:
@@ -45,13 +45,13 @@ jobs:
             exit 1
           fi
 
-      - name: Run web checkin
+      - name: Run app checkin
         shell: bash
         env:
-          RETRY_KEYWORDS: "请求失败|执行失败|未获取到题目|会员信息查询失败|Read timed out|Connection"
+          RETRY_KEYWORDS: "App 端签到请求失败|App 端签到列表查询失败|App 每日题目获取失败|App 每日答题提交失败|App 会员信息查询失败|App 端执行失败|Read timed out|Connection"
         run: |
           run_checkin() {
-            python -m baiduwp_checkin --no-random-delay 2>&1 | tee checkin-output.log
+            python baiduwp_checkin/app.py 2>&1 | tee app-checkin-output.log
             return "${PIPESTATUS[0]}"
           }
 
@@ -59,14 +59,14 @@ jobs:
           run_checkin
           status="$?"
 
-          if [ "$status" -ne 0 ] || grep -Eq "$RETRY_KEYWORDS" checkin-output.log; then
+          if [ "$status" -ne 0 ] || grep -Eq "$RETRY_KEYWORDS" app-checkin-output.log; then
             echo "Detected failed status or retry keyword, retrying once after 30 seconds..."
             sleep 30
 
             run_checkin
             retry_status="$?"
 
-            if [ "$retry_status" -ne 0 ] || grep -Eq "$RETRY_KEYWORDS" checkin-output.log; then
+            if [ "$retry_status" -ne 0 ] || grep -Eq "$RETRY_KEYWORDS" app-checkin-output.log; then
               echo "Retry still failed or matched retry keyword."
               exit 1
             fi
